@@ -13,11 +13,14 @@ drag_place.style.padding = "10px";
 drag_place.style.textAlign = "center";
 done.appendChild(drag_place);                                                           // Add placeholder to done list
 
-function createDraggableTask(task) {                                                    // Function to create a draggable task element
+let currentDrag;  // To hold the currently dragged element
+
+function createDraggableTask(task) {
     let new_ele = document.createElement("li");
     new_ele.textContent = task;
     new_ele.setAttribute("draggable", "true");
 
+    // Add mouse events for desktop
     new_ele.addEventListener("dragstart", (e) => {
         e.dataTransfer.setData("text/plain", task);
         e.target.classList.add("dragging");
@@ -27,45 +30,46 @@ function createDraggableTask(task) {                                            
         e.target.classList.remove("dragging");
     });
 
-    new_ele.addEventListener("click", () => {
-        todo.removeChild(new_ele);
-        saveTodoTasks();
+    // Add touch events for mobile
+    new_ele.addEventListener("touchstart", (e) => {
+        currentDrag = new_ele;
+        e.preventDefault();  // Prevent default to allow touch move
     });
 
     return new_ele;
 }
 
-function saveTodoTasks() {                                                                      // Function to save TODO tasks to localStorage
+function saveTodoTasks() {
     const todoItems = Array.from(todo.children).map(item => item.textContent);
     localStorage.setItem('todoTasks', JSON.stringify(todoItems));
 }
-function saveDoneTasks() {                                                                                      // Function to save DONE tasks to localStorage
+
+function saveDoneTasks() {
     const doneItems = Array.from(done.children).filter(item => item !== drag_place).map(item => item.textContent);
     localStorage.setItem('doneTasks', JSON.stringify(doneItems));
 }
 
-function loadTasks() {                                                                              // Function to load tasks from localStorage
+function loadTasks() {
     const savedTodoTasks = JSON.parse(localStorage.getItem('todoTasks')) || [];
     const savedDoneTasks = JSON.parse(localStorage.getItem('doneTasks')) || [];
 
-    
-    savedTodoTasks.forEach(task => {                          // Load TODO tasks
+    savedTodoTasks.forEach(task => {
         let new_ele = createDraggableTask(task);
         todo.appendChild(new_ele);
     });
 
-    savedDoneTasks.forEach(task => {                          // Load DONE tasks
+    savedDoneTasks.forEach(task => {
         let new_ele_done = createDraggableTask(task);
         done.appendChild(new_ele_done);
     });
-    updateDragPlaceholder();                                  // Show or hide the drag placeholder based on the done tasks
+    updateDragPlaceholder();
 }
 
-function updateDragPlaceholder() {                            // Function to update the visibility of the drag placeholder
+function updateDragPlaceholder() {
     done.appendChild(drag_place);
 }
-                                            
-new_task.addEventListener("click", () => {                    // Event listener to add a new task
+
+new_task.addEventListener("click", () => {
     let curr_task = input_val.value.trim();
     input_val.value = "";
 
@@ -76,11 +80,12 @@ new_task.addEventListener("click", () => {                    // Event listener 
     } 
 });
 
-
-done.addEventListener("dragover", (e) => {                     // Allow dropping onto the DONE list
+// Allow dropping onto the DONE list for desktop
+done.addEventListener("dragover", (e) => {
     e.preventDefault(); 
 });
-done.addEventListener("drop", (e) => {                          // Handle dropping of tasks into the DONE list
+
+done.addEventListener("drop", (e) => {
     e.preventDefault(); 
     const task = e.dataTransfer.getData("text/plain");
     if (task) {
@@ -93,11 +98,44 @@ done.addEventListener("drop", (e) => {                          // Handle droppi
             saveTodoTasks(); 
         }
         saveDoneTasks();
-        updateDragPlaceholder();                                // Update placeholder visibility after dropping a task
+        updateDragPlaceholder();
     }
 });
 
-delete_task.addEventListener("click", () => {                   // Event listener to delete all done tasks
+// Add touch move event for mobile
+done.addEventListener("touchmove", (e) => {
+    if (currentDrag) {
+        const touchLocation = e.touches[0];
+        currentDrag.style.position = 'absolute';
+        currentDrag.style.left = `${touchLocation.clientX}px`;
+        currentDrag.style.top = `${touchLocation.clientY}px`;
+    }
+});
+
+// Add touch end event for mobile
+done.addEventListener("touchend", (e) => {
+    if (currentDrag) {
+        let touchLocation = e.changedTouches[0];
+        const dropArea = done.getBoundingClientRect();
+        
+        // Check if the touch location is inside the DONE list
+        if (touchLocation.clientX >= dropArea.left && touchLocation.clientX <= dropArea.right &&
+            touchLocation.clientY >= dropArea.top && touchLocation.clientY <= dropArea.bottom) {
+            done.appendChild(currentDrag);
+            saveDoneTasks();
+        } else {
+            todo.appendChild(currentDrag); // If not dropped in the DONE area, return it to TODO
+            saveTodoTasks();
+        }
+
+        currentDrag.style.position = '';  // Reset position
+        currentDrag = null;  // Clear the current drag reference
+        updateDragPlaceholder(); // Update placeholder visibility after dropping a task
+    }
+});
+
+// Add event listener to delete all done tasks
+delete_task.addEventListener("click", () => {
     done.innerHTML = "";                                        // Clear done list
     done.appendChild(drag_place);                               // Re-add drag placeholder
     saveDoneTasks();                                            // Save the empty state
